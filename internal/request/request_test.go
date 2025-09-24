@@ -2,7 +2,7 @@ package request
 
 import (
 	"fmt"
-	"strings"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,17 +10,11 @@ import (
 )
 
 func TestParsesRequestLine(t *testing.T) {
-	r, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"GET / HTTP/1.1",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
-	)
+	data := createRequest("GET / HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: len(data),
+	})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	assert.Equal(t, "GET", r.RequestLine.Method)
@@ -29,17 +23,11 @@ func TestParsesRequestLine(t *testing.T) {
 }
 
 func TestParseRequestLineWithPath(t *testing.T) {
-	r, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"GET /coffee HTTP/1.1",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
-	)
+	data := createRequest("GET /coffee HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: len(data) / 2,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	assert.Equal(t, "GET", r.RequestLine.Method)
@@ -48,17 +36,11 @@ func TestParseRequestLineWithPath(t *testing.T) {
 }
 
 func TestParsePostRequestLineWithPath(t *testing.T) {
-	r, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"POST /coffee HTTP/1.1",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
-	)
+	data := createRequest("POST /coffee HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 8,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	assert.Equal(t, "POST", r.RequestLine.Method)
@@ -67,46 +49,83 @@ func TestParsePostRequestLineWithPath(t *testing.T) {
 }
 
 func TestInvalidNumberOfRequestLineParts(t *testing.T) {
-	_, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"/coffee HTTP/1.1",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
+	data := createRequest("/coffee HTTP/1.1")
+	_, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 5,
+	},
 	)
 	require.Error(t, err)
 }
 
 func TestInvalidMethodOrder(t *testing.T) {
-	_, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"/ GET HTTP/1.1",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
+	data := createRequest("/ GET HTTP/1.1")
+	_, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 50,
+	},
 	)
 	require.Error(t, err)
 }
 
 func TestInvalidHttpVersion(t *testing.T) {
-	_, err := RequestFromReader(
-		strings.NewReader(
-			fmt.Sprintf(
-				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
-				"GET / HTTP/69.0",
-				"Host: localhost:42069",
-				"User-Agent: curl/7.81",
-				"Accept: */*",
-			),
-		),
-	)
+	data := createRequest("GET / HTTP/69.0")
+	_, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 10,
+	})
 	require.Error(t, err)
+}
+
+func TestReadRequestWithThreeByteChunks(t *testing.T) {
+	data := createRequest("GET / HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 3,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "GET", r.RequestLine.Method)
+	assert.Equal(t, "/", r.RequestLine.RequestTarget)
+	assert.Equal(t, "1.1", r.RequestLine.HttpVersion)
+}
+
+func TestReadRequestWithOneByteChunks(t *testing.T) {
+	data := createRequest("GET /coffee HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 1,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "GET", r.RequestLine.Method)
+	assert.Equal(t, "/coffee", r.RequestLine.RequestTarget)
+	assert.Equal(t, "1.1", r.RequestLine.HttpVersion)
+}
+
+func createRequest(requestLine string) string {
+	return fmt.Sprintf(
+		"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+		requestLine,
+		"Host: localhost:42069",
+		"User-Agent: curl/7.81",
+		"Accept: */*",
+	)
+}
+
+type chunkReader struct {
+	data            string
+	numBytesPerRead int
+	pos             int
+}
+
+func (cr *chunkReader) Read(p []byte) (n int, err error) {
+	if cr.pos >= len(cr.data) {
+		return 0, io.EOF
+	}
+	endIdx := min(cr.pos+cr.numBytesPerRead, len(cr.data))
+	n = copy(p, []byte(cr.data)[cr.pos:endIdx])
+	cr.pos += n
+
+	return n, nil
 }
