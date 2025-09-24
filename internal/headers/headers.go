@@ -25,23 +25,16 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	headerStr := string(data[:idx])
-	n = len(headerStr) + 2
-	headerPair := strings.SplitN(headerStr, ":", 2)
-	if len(headerPair) != 2 {
-		return 0, false, fmt.Errorf(
-			"Malformed header pair: %v, len: %d",
-			headerPair,
-			len(headerPair),
-		)
-	}
+	pair := strings.SplitN(headerStr, ":", 2)
 
-	key, value := headerPair[0], strings.TrimSpace(headerPair[1])
+	key, value := pair[0], pair[1]
 	if key[len(key)-1] == ' ' {
-		return 0, false, fmt.Errorf("Malformed header key: %s", key)
+		return 0, false, fmt.Errorf("Invalid header name: %s", key)
 	}
 
 	key = strings.TrimSpace(key)
-	h[key] = value
+	h[key] = strings.TrimSpace(value)
 
-	return n, done, err
+	// amount of bytes read is index + CRLF (2)
+	return idx + 2, false, err
 }
