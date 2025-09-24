@@ -20,8 +20,8 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	if idx == 0 {
-		// no headers found, we're done
-		return 0, true, nil
+		// no headers found, we're done -> consume the CRLF
+		return 2, true, nil
 	}
 
 	headerStr := string(data[:idx])
