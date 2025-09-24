@@ -7,10 +7,45 @@ import (
 	"strings"
 )
 
+const bufferSize = 8
+
+type requestState int
+
+const (
+	initialized requestState = iota
+	done
+)
+
 type Request struct {
 	RequestLine RequestLine
 	Headers     map[string]string
 	Body        []byte
+	state       requestState
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	switch r.state {
+	case initialized:
+		n, reqLine, err := parseRequestLine(data)
+		if err != nil {
+			// something bad happened
+			return 0, err
+		}
+
+		if n == 0 {
+			// need more data
+			return 0, nil
+		}
+
+		r.RequestLine = *reqLine
+		r.state = done
+
+		return n, nil
+	case done:
+		return 0, fmt.Errorf("error: trying to read data in done state")
+	default:
+		return 0, fmt.Errorf("error: unknown state")
+	}
 }
 
 type RequestLine struct {
@@ -20,32 +55,53 @@ type RequestLine struct {
 }
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	bytes, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
+	buf := make([]byte, bufferSize)
+	readToIdx := 0
+	req := &Request{state: initialized}
+
+	for req.state != done {
+		if readToIdx == len(buf) {
+			newBuf := make([]byte, len(buf)*2)
+			copy(newBuf, buf)
+			buf = newBuf
+		}
+
+		numBytesRead, err := reader.Read(buf[readToIdx:])
+		if err != nil {
+			if err == io.EOF {
+				req.state = done
+				break
+			}
+
+			return nil, err
+		}
+		readToIdx += numBytesRead
+
+		numBytesParsed, err := req.parse(buf[:readToIdx])
+		if err != nil {
+			return nil, err
+		}
+
+		copy(buf, buf[numBytesParsed:])
+		readToIdx -= numBytesParsed
 	}
 
-	requestLine, err := parseRequestLine(bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Request{RequestLine: *requestLine}, nil
+	return req, nil
 }
 
-func parseRequestLine(data []byte) (*RequestLine, error) {
+func parseRequestLine(data []byte) (int, *RequestLine, error) {
 	idx := bytes.Index(data, []byte("\r\n"))
 	if idx == -1 {
-		return nil, fmt.Errorf("Failed to find CRLF in request-line")
+		return 0, nil, nil
 	}
 
 	reqLineStr := string(data[:idx])
 	reqLine, err := requestLineFromString(reqLineStr)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	return reqLine, nil
+	return idx + 2, reqLine, nil
 }
 
 func requestLineFromString(str string) (*RequestLine, error) {
