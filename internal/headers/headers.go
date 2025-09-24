@@ -33,8 +33,18 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	key = strings.TrimSpace(key)
-	h[key] = strings.TrimSpace(value)
+	h.Set(key, strings.TrimSpace(value))
 
 	// amount of bytes read is index + CRLF (2)
 	return idx + 2, false, err
+}
+
+func (h Headers) Set(key, value string) {
+	h[key] = value
+}
+
+func (h Headers) Get(key string) (string, bool) {
+	value, found := h[key]
+
+	return value, found
 }
