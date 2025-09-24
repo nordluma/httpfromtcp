@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode"
 )
 
 type Request struct {
@@ -76,7 +75,7 @@ func requestLineFromString(str string) (*RequestLine, error) {
 func parseHttpMethod(methodPart string) (string, error) {
 	methodStr := strings.TrimSpace(methodPart)
 	for _, char := range methodStr {
-		if !unicode.IsLetter(char) || !unicode.IsUpper(char) {
+		if char < 'A' || char > 'Z' {
 			return "", fmt.Errorf("Invalid method: %s", methodStr)
 		}
 	}
