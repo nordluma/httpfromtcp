@@ -1,6 +1,7 @@
 package request
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -11,7 +12,13 @@ import (
 func TestParsesRequestLine(t *testing.T) {
 	r, err := RequestFromReader(
 		strings.NewReader(
-			"GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"GET / HTTP/1.1",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.NoError(t, err)
@@ -24,7 +31,13 @@ func TestParsesRequestLine(t *testing.T) {
 func TestParseRequestLineWithPath(t *testing.T) {
 	r, err := RequestFromReader(
 		strings.NewReader(
-			"GET /coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"GET /coffee HTTP/1.1",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.NoError(t, err)
@@ -37,7 +50,13 @@ func TestParseRequestLineWithPath(t *testing.T) {
 func TestParsePostRequestLineWithPath(t *testing.T) {
 	r, err := RequestFromReader(
 		strings.NewReader(
-			"POST /coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"POST /coffee HTTP/1.1",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.NoError(t, err)
@@ -50,7 +69,13 @@ func TestParsePostRequestLineWithPath(t *testing.T) {
 func TestInvalidNumberOfRequestLineParts(t *testing.T) {
 	_, err := RequestFromReader(
 		strings.NewReader(
-			"/coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"/coffee HTTP/1.1",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.Error(t, err)
@@ -59,7 +84,13 @@ func TestInvalidNumberOfRequestLineParts(t *testing.T) {
 func TestInvalidMethodOrder(t *testing.T) {
 	_, err := RequestFromReader(
 		strings.NewReader(
-			"/ GET HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"/ GET HTTP/1.1",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.Error(t, err)
@@ -68,7 +99,13 @@ func TestInvalidMethodOrder(t *testing.T) {
 func TestInvalidHttpVersion(t *testing.T) {
 	_, err := RequestFromReader(
 		strings.NewReader(
-			"/ GET HTTP/69.0\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+			fmt.Sprintf(
+				"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+				"GET / HTTP/69.0",
+				"Host: localhost:42069",
+				"User-Agent: curl/7.81",
+				"Accept: */*",
+			),
 		),
 	)
 	require.Error(t, err)
