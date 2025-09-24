@@ -39,7 +39,9 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if key[len(key)-1] == ' ' {
 		return 0, false, fmt.Errorf("Malformed header key: %s", key)
 	}
-	h[strings.TrimSpace(key)] = value
+
+	key = strings.TrimSpace(key)
+	h[key] = value
 
 	return n, done, err
 }
