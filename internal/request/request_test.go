@@ -182,6 +182,67 @@ func TestParseRequestMissingEOFHeaders(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseRequestWithStandardBody(t *testing.T) {
+	body := "hello world!\n"
+	r, err := RequestFromReader(&chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:42069\r\n" +
+			"Content-Length: 13\r\n\r\n" +
+			body,
+		numBytesPerRead: 5,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "13", r.Headers["content-length"])
+	assert.Equal(t, body, string(r.Body))
+}
+
+func TestRequestWithEmptyBodyAndContentLength(t *testing.T) {
+	data := createRequestWithBody("POST /login HTTP/1.1", "")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 3,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "0", r.Headers["content-length"])
+}
+
+func TestRequestWithLongerBodyThanContentLength(t *testing.T) {
+	_, err := RequestFromReader(&chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:42069\r\n" +
+			"Content-Length: 20\r\n\r\n" +
+			"partial content",
+		numBytesPerRead: 3,
+	})
+	require.Error(t, err)
+}
+
+func TestRequestWithBodyButNoContentLength(t *testing.T) {
+	r, err := RequestFromReader(&chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:42069\r\n\r\n" +
+			"This should no be here",
+		numBytesPerRead: 3,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, 0, len(r.Body))
+}
+
+func createRequestWithBody(reqLine, body string) string {
+	return fmt.Sprintf(
+		"%s\r\n%s\r\n%s\r\n%s\r\n%s\r\n\r\n%s",
+		reqLine,
+		"Host: localhost:42069",
+		"User-Agent: curl/7.81",
+		"Accept: */*",
+		fmt.Sprintf("Content-Length: %d", len(body)),
+		body,
+	)
+}
+
 func createRequest(requestLine string) string {
 	return fmt.Sprintf(
 		"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
