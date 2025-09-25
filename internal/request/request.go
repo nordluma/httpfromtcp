@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/nordluma/httpfromtcp/internal/headers"
 )
 
 const bufferSize = 8
@@ -12,20 +14,38 @@ const bufferSize = 8
 type requestState int
 
 const (
-	initialized requestState = iota
-	done
+	reqStateInitialized requestState = iota
+	reqStateParsingHeaders
+	reqStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
-	Headers     map[string]string
+	Headers     headers.Headers
 	Body        []byte
 	state       requestState
 }
 
 func (r *Request) parse(data []byte) (int, error) {
+	totalBytesParsed := 0
+	for r.state != reqStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+
+	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
 	switch r.state {
-	case initialized:
+	case reqStateInitialized:
 		n, reqLine, err := parseRequestLine(data)
 		if err != nil {
 			// something bad happened
@@ -38,10 +58,22 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		r.RequestLine = *reqLine
-		r.state = done
+		r.state = reqStateParsingHeaders
 
 		return n, nil
-	case done:
+	case reqStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+
+		if done {
+			// headers have been parsed -> state transition
+			r.state = reqStateDone
+		}
+
+		return n, nil
+	case reqStateDone:
 		return 0, fmt.Errorf("error: trying to read data in done state")
 	default:
 		return 0, fmt.Errorf("error: unknown state")
@@ -57,9 +89,12 @@ type RequestLine struct {
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, bufferSize)
 	readToIdx := 0
-	req := &Request{state: initialized}
+	req := &Request{
+		state:   reqStateInitialized,
+		Headers: headers.NewHeaders(),
+	}
 
-	for req.state != done {
+	for req.state != reqStateDone {
 		if readToIdx == len(buf) {
 			newBuf := make([]byte, len(buf)*2)
 			copy(newBuf, buf)
@@ -69,7 +104,14 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		numBytesRead, err := reader.Read(buf[readToIdx:])
 		if err != nil {
 			if err == io.EOF {
-				req.state = done
+				if req.state != reqStateDone {
+					return nil, fmt.Errorf(
+						"incomplete request. State: %d, read n bytes on EOF: %d",
+						req.state,
+						numBytesRead,
+					)
+				}
+
 				break
 			}
 
