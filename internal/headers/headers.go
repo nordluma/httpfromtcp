@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -28,11 +29,11 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	pair := strings.SplitN(headerStr, ":", 2)
 
 	key, value := pair[0], pair[1]
-	if key[len(key)-1] == ' ' {
-		return 0, false, fmt.Errorf("Invalid header name: %s", key)
+	key, err = parseHeaderKey(key)
+	if err != nil {
+		return 0, false, err
 	}
 
-	key = strings.TrimSpace(key)
 	h.Set(key, strings.TrimSpace(value))
 
 	// amount of bytes read is index + CRLF (2)
@@ -47,4 +48,44 @@ func (h Headers) Get(key string) (string, bool) {
 	value, found := h[key]
 
 	return value, found
+}
+
+var allowedSpecialChars = []rune{
+	'!',
+	'#',
+	'$',
+	'%',
+	'&',
+	'\'',
+	'*',
+	'+',
+	'-',
+	'.',
+	'^',
+	'_',
+	'`',
+	'|',
+	'~',
+}
+
+func parseHeaderKey(key string) (string, error) {
+	if key[len(key)-1] == ' ' {
+		return "", fmt.Errorf("Invalid header name: %s", key)
+	}
+
+	key = strings.TrimSpace(key)
+	for _, char := range key {
+		isUpperChar := char >= 'A' && char <= 'Z'
+		isLowerChar := char >= 'a' && char <= 'z'
+		isDigit := char >= '0' && char <= '9'
+		isAllowedSpecialChar := slices.Contains(allowedSpecialChars, char)
+
+		if isUpperChar || isLowerChar || isDigit || isAllowedSpecialChar {
+			continue
+		}
+
+		return "", fmt.Errorf("Invalid header name: %s", key)
+	}
+
+	return key, nil
 }
