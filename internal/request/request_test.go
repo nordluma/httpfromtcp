@@ -103,6 +103,85 @@ func TestReadRequestWithOneByteChunks(t *testing.T) {
 	assert.Equal(t, "1.1", r.RequestLine.HttpVersion)
 }
 
+func TestParseRequestAndStandardHeaders(t *testing.T) {
+	data := createRequest("GET / HTTP/1.1")
+	r, err := RequestFromReader(&chunkReader{
+		data:            data,
+		numBytesPerRead: 3,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069", r.Headers["host"])
+	assert.Equal(t, "curl/7.81", r.Headers["user-agent"])
+	assert.Equal(t, "*/*", r.Headers["accept"])
+}
+
+func TestParseRequestWithEmptyHeaders(t *testing.T) {
+	r, err := RequestFromReader(&chunkReader{
+		data:            "GET /coffee HTTP/1.1\r\n\r\n",
+		numBytesPerRead: 5,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+}
+
+func TestParseRequestWithMalformedHeader(t *testing.T) {
+	_, err := RequestFromReader(&chunkReader{
+		data: fmt.Sprintf(
+			"%s\r\n%s\r\n\r\n",
+			"GET / HTTP/1.1",
+			"Host localhost:42069",
+		),
+		numBytesPerRead: 3,
+	})
+	assert.Error(t, err)
+}
+
+func TestParseRequestWithDuplicateHeaders(t *testing.T) {
+	r, err := RequestFromReader(&chunkReader{
+		data: fmt.Sprintf(
+			"%s\r\n%s\r\n%s\r\n\r\n",
+			"GET / HTTP/1.1",
+			"Accept-Encoding: gzip",
+			"Accept-Encoding: brotli",
+		),
+		numBytesPerRead: 10,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "gzip, brotli", r.Headers["accept-encoding"])
+}
+
+func TestParseRequestWithCaseInsensitiveHeaders(t *testing.T) {
+	r, err := RequestFromReader(&chunkReader{
+		data: fmt.Sprintf(
+			"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
+			"GET / HTTP/1.1",
+			"HOST: localhost:42069",
+			"USER-AGENT: curl/7.81",
+			"ACCEPT: */*",
+		),
+		numBytesPerRead: 15,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069", r.Headers["host"])
+	assert.Equal(t, "curl/7.81", r.Headers["user-agent"])
+	assert.Equal(t, "*/*", r.Headers["accept"])
+}
+
+func TestParseRequestMissingEOFHeaders(t *testing.T) {
+	_, err := RequestFromReader(&chunkReader{
+		data: fmt.Sprintf(
+			"%s\r\n%s",
+			"POST /password HTTP/1.1",
+			"Host: localhost:42069",
+		),
+		numBytesPerRead: 1,
+	})
+	require.Error(t, err)
+}
+
 func createRequest(requestLine string) string {
 	return fmt.Sprintf(
 		"%s\r\n%s\r\n%s\r\n%s\r\n\r\n",
