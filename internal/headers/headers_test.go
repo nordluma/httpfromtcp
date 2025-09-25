@@ -125,3 +125,14 @@ func TestCaseInsensitiveHeaders(t *testing.T) {
 		assert.Equal(t, value, c.value)
 	}
 }
+
+func TestAddMultipleValuesToSingleHeader(t *testing.T) {
+	headers := NewHeaders()
+	for _, value := range []string{"one", "two", "three"} {
+		headers.Set("custom", value)
+	}
+
+	value, found := headers.Get("custom")
+	assert.True(t, found)
+	assert.Equal(t, "one, two, three", value)
+}
