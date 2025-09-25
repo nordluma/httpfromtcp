@@ -93,3 +93,35 @@ func TestInvalidCharacterInHeaderKey(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
 }
+
+func TestCaseInsensitiveHeaders(t *testing.T) {
+	cases := []struct {
+		setter string
+		getter string
+		value  string
+	}{
+		{
+			setter: "Host",
+			getter: "host",
+			value:  "localhost:42069",
+		},
+		{
+			setter: "cOnTeNt-LeNgTh",
+			getter: "CoNtEnT-lEnGtH",
+			value:  "69",
+		},
+		{
+			setter: "content-type",
+			getter: "CONTENT-TYPE",
+			value:  "application/json",
+		},
+	}
+
+	headers := NewHeaders()
+	for _, c := range cases {
+		headers.Set(c.setter, c.value)
+		value, found := headers.Get(c.getter)
+		assert.True(t, found)
+		assert.Equal(t, value, c.value)
+	}
+}
