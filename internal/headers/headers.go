@@ -41,10 +41,12 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 }
 
 func (h Headers) Set(key, value string) {
+	key = strings.ToLower(key)
 	h[key] = value
 }
 
 func (h Headers) Get(key string) (string, bool) {
+	key = strings.ToLower(key)
 	value, found := h[key]
 
 	return value, found
