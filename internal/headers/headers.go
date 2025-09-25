@@ -42,7 +42,12 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 func (h Headers) Set(key, value string) {
 	key = strings.ToLower(key)
-	h[key] = value
+	existingValue, found := h[key]
+	if found {
+		h[key] = existingValue + ", " + value
+	} else {
+		h[key] = value
+	}
 }
 
 func (h Headers) Get(key string) (string, bool) {
