@@ -13,7 +13,9 @@ func TestParseSingleHeader(t *testing.T) {
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	value, found := headers.Get("Host")
+	assert.True(t, found)
+	assert.Equal(t, "localhost:42069", value)
 	assert.Equal(t, len(data)-2, n) // the last CRLF is excluded
 	assert.False(t, done)
 }
@@ -33,20 +35,24 @@ func TestParseSingleHeaderWithExtraSpace(t *testing.T) {
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	value, found := headers.Get("Host")
+	assert.True(t, found)
+	assert.Equal(t, "localhost:42069", value)
 	assert.Equal(t, len(data)-2, n)
 	assert.False(t, done)
 }
 
 func TestParseTwoHeadersWithExistingHeaders(t *testing.T) {
 	headers := NewHeaders()
-	headers["Content-Type"] = "application/json"
-	headers["Accept-Encoding"] = "gzip"
+	headers.Set("Content-Type", "application/json")
+	headers.Set("Accept-Encoding", "gzip")
 	data := []byte("Host: localhost:42069\r\nContent-Length: 55\r\n\r\n")
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	value, found := headers.Get("Host")
+	assert.True(t, found)
+	assert.Equal(t, "localhost:42069", value)
 	assert.Equal(t, 23, n)
 	assert.False(t, done)
 
@@ -54,12 +60,19 @@ func TestParseTwoHeadersWithExistingHeaders(t *testing.T) {
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "55", headers["Content-Length"])
+	value, found = headers.Get("Content-Length")
+	assert.True(t, found)
+	assert.Equal(t, "55", value)
 	assert.Equal(t, 20, n)
 	assert.False(t, done)
 
-	assert.Equal(t, "application/json", headers["Content-Type"])
-	assert.Equal(t, "gzip", headers["Accept-Encoding"])
+	value, found = headers.Get("Content-Type")
+	assert.True(t, found)
+	assert.Equal(t, "application/json", value)
+
+	value, found = headers.Get("Accept-Encoding")
+	assert.True(t, found)
+	assert.Equal(t, "gzip", value)
 }
 
 func TestParseDoneFieldLine(t *testing.T) {
