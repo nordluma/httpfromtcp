@@ -34,7 +34,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, err
 	}
 
-	h.Set(key, strings.TrimSpace(value))
+	h.Set(key, value)
 
 	// amount of bytes read is index + CRLF (2)
 	return idx + 2, false, err
@@ -42,6 +42,8 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 func (h Headers) Set(key, value string) {
 	key = strings.ToLower(key)
+	value = strings.TrimSpace(value)
+
 	existingValue, found := h[key]
 	if found {
 		h[key] = existingValue + ", " + value
