@@ -10,7 +10,7 @@ import (
 
 type Server struct {
 	listener net.Listener
-	closed   *atomic.Bool
+	closed   atomic.Bool
 }
 
 func Serve(port int) (*Server, error) {
