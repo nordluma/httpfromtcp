@@ -81,21 +81,23 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		// no content-length, we assume that there is no body
 		if !found {
 			r.state = reqStateDone
-			return 0, nil
+			return len(data), nil
 		}
 
 		r.Body = append(r.Body, data...)
-
 		contentLen := len(r.Body)
 		hContentLen, err := strconv.Atoi(value)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("malformed Content-Length: %s", err)
 		}
+
 		if contentLen > hContentLen {
 			return 0, fmt.Errorf(
 				"error: payload size larger than defined in content-length",
 			)
-		} else if contentLen == hContentLen {
+		}
+
+		if contentLen == hContentLen {
 			r.state = reqStateDone
 		}
 
