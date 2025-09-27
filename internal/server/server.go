@@ -19,35 +19,38 @@ func Serve(port int) (*Server, error) {
 		return nil, err
 	}
 
-	closed := &atomic.Bool{}
-	closed.Store(false)
-
-	server := &Server{
+	s := &Server{
 		listener: listener,
-		closed:   closed,
 	}
 
-	go server.listen()
+	go s.listen()
 
-	return server, nil
+	return s, nil
 }
 
 func (s *Server) Close() error {
 	s.closed.Store(true)
+	if s.listener != nil {
+		return s.listener.Close()
+	}
 
-	return s.listener.Close()
+	return nil
 }
 
 func (s *Server) listen() {
 	for {
 		conn, err := s.listener.Accept()
-		if !s.closed.Load() && err != nil {
+		if err != nil {
+			if s.closed.Load() {
+				return
+			}
+
 			fmt.Printf("error accepting connection: %s\n", err.Error())
 			continue
 		}
 		fmt.Printf("Connection accepted: %s\n", conn.RemoteAddr())
 
-		s.handle(conn)
+		go s.handle(conn)
 	}
 }
 
