@@ -206,6 +206,7 @@ func TestRequestWithEmptyBodyAndContentLength(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, r)
 	assert.Equal(t, "0", r.Headers["content-length"])
+	assert.Equal(t, 0, len(r.Body))
 }
 
 func TestRequestWithLongerBodyThanContentLength(t *testing.T) {
