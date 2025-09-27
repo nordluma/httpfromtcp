@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/nordluma/httpfromtcp/internal/request"
+	"github.com/nordluma/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -74,14 +75,12 @@ func (s *Server) handle(conn net.Conn) {
 	fmt.Println("Body:")
 	fmt.Printf("%s\n", string(req.Body))
 
-	response := fmt.Sprintf("%s\r\n%s\r\n%s\r\n\r\n%s\n",
-		"HTTP/1.1 200 OK",
-		"Content-Type: text/plain",
-		"Content-Length: 13",
-		"Hello World!",
-	)
+	if err = response.WriteStatusLine(conn, response.Ok); err != nil {
+		fmt.Printf("error writing status line: %s\n", err.Error())
+	}
 
-	if _, err = conn.Write([]byte(response)); err != nil {
-		fmt.Printf("error writing response: %s\n", err.Error())
+	headers := response.GetDefaultHeaders(0)
+	if err = response.WriteHeaders(conn, headers); err != nil {
+		fmt.Printf("error writing headers: %s\n", err)
 	}
 }
