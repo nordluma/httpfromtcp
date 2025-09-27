@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/nordluma/httpfromtcp/internal/headers"
@@ -16,6 +17,7 @@ type requestState int
 const (
 	reqStateInitialized requestState = iota
 	reqStateParsingHeaders
+	reqStateParsingBody
 	reqStateDone
 )
 
@@ -69,10 +71,35 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 
 		if done {
 			// headers have been parsed -> state transition
-			r.state = reqStateDone
+			r.state = reqStateParsingBody
 		}
 
 		return n, nil
+	case reqStateParsingBody:
+		value, found := r.Headers.Get("content-length")
+
+		// no content-length, we assume that there is no body
+		if !found {
+			r.state = reqStateDone
+			return 0, nil
+		}
+
+		r.Body = append(r.Body, data...)
+
+		contentLen := len(r.Body)
+		hContentLen, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, err
+		}
+		if contentLen > hContentLen {
+			return 0, fmt.Errorf(
+				"error: payload size larger than defined in content-length",
+			)
+		} else if contentLen == hContentLen {
+			r.state = reqStateDone
+		}
+
+		return len(data), nil
 	case reqStateDone:
 		return 0, fmt.Errorf("error: trying to read data in done state")
 	default:
