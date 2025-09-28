@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -29,13 +28,7 @@ func defaultHandler(w io.Writer, req *request.Request) *server.HandlerError {
 		)
 	}
 
-	if _, err := w.Write([]byte("All good, frfr\n")); err != nil {
-		fmt.Printf(
-			"failed to write response into buff: %s\n",
-			err.Error(),
-		)
-	}
-
+	w.Write([]byte("All good, frfr\n"))
 	return nil
 }
 
