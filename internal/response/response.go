@@ -10,35 +10,31 @@ import (
 type StatusCode int
 
 const (
-	Ok StatusCode = iota
-	BadRequest
-	InternalError
+	Ok            StatusCode = 200
+	BadRequest    StatusCode = 400
+	InternalError StatusCode = 500
 )
 
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
-	var statusLine string
+	reasonPhrase := ""
 	switch statusCode {
 	case Ok:
-		statusLine = "HTTP/1.1 200 OK"
+		reasonPhrase = "OK"
 	case BadRequest:
-		statusLine = "HTTP/1.1 400 Bad Request"
+		reasonPhrase = "Bad Request"
 	case InternalError:
-		statusLine = "HTTP/1.1 500 Internal Server Error"
-	default:
-		statusLine = ""
+		reasonPhrase = "Internal Server Error"
 	}
 
-	statusLine = fmt.Sprintf("%s\r\n", statusLine)
-	if _, err := w.Write([]byte(statusLine)); err != nil {
-		return err
-	}
+	statusLine := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase)
 
-	return nil
+	_, err := w.Write([]byte(statusLine))
+
+	return err
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
 	headers := headers.NewHeaders()
-
 	headers.Set("Content-Length", fmt.Sprintf("%d", contentLen))
 	headers.Set("Connection", "close")
 	headers.Set("Content-Type", "text/plain")
@@ -55,9 +51,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 	}
 
 	// add the end of headers
-	if _, err := w.Write([]byte("\r\n")); err != nil {
-		return err
-	}
+	_, err := w.Write([]byte("\r\n"))
 
-	return nil
+	return err
 }
