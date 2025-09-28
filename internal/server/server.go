@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"sync/atomic"
 
@@ -9,12 +11,45 @@ import (
 	"github.com/nordluma/httpfromtcp/internal/response"
 )
 
-type Server struct {
-	listener net.Listener
-	closed   atomic.Bool
+type Handler func(w io.Writer, req *request.Request) *HandlerError
+
+type HandlerError struct {
+	status  response.StatusCode
+	message string
 }
 
-func Serve(port int) (*Server, error) {
+func NewHandlerError(status response.StatusCode, message string) *HandlerError {
+	return &HandlerError{
+		status:  status,
+		message: message,
+	}
+}
+
+func writeHandlerError(w io.Writer, error *HandlerError) error {
+	err := response.WriteStatusLine(w, error.status)
+	if err != nil {
+		return err
+	}
+
+	headers := response.GetDefaultHeaders(len(error.message))
+	err = response.WriteHeaders(w, headers)
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(w, "%s\r\n", error.message)
+
+	return err
+}
+
+type Server struct {
+	listener net.Listener
+	handler  Handler
+
+	closed atomic.Bool
+}
+
+func Serve(port int, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return nil, err
@@ -22,6 +57,7 @@ func Serve(port int) (*Server, error) {
 
 	s := &Server{
 		listener: listener,
+		handler:  handler,
 	}
 
 	go s.listen()
@@ -75,12 +111,24 @@ func (s *Server) handle(conn net.Conn) {
 	fmt.Println("Body:")
 	fmt.Printf("%s\n", string(req.Body))
 
+	buf := bytes.NewBuffer([]byte{})
+	resErr := s.handler(buf, req)
+	if resErr != nil {
+		if err := writeHandlerError(conn, resErr); err != nil {
+			fmt.Printf("error writing response error: %s", err.Error())
+		}
+	}
+
 	if err = response.WriteStatusLine(conn, response.Ok); err != nil {
 		fmt.Printf("error writing status line: %s\n", err.Error())
 	}
 
-	headers := response.GetDefaultHeaders(0)
+	headers := response.GetDefaultHeaders(buf.Len())
 	if err = response.WriteHeaders(conn, headers); err != nil {
 		fmt.Printf("error writing headers: %s\n", err)
+	}
+
+	if _, err = conn.Write(buf.Bytes()); err != nil {
+		fmt.Printf("error writing response body: %s\n", err)
 	}
 }
