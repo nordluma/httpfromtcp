@@ -25,21 +25,11 @@ func NewHandlerError(status response.StatusCode, message string) *HandlerError {
 	}
 }
 
-func writeHandlerError(w io.Writer, error *HandlerError) error {
-	err := response.WriteStatusLine(w, error.status)
-	if err != nil {
-		return err
-	}
-
-	headers := response.GetDefaultHeaders(len(error.message))
-	err = response.WriteHeaders(w, headers)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintf(w, "%s\r\n", error.message)
-
-	return err
+func (h HandlerError) Write(w io.Writer) {
+	response.WriteStatusLine(w, h.status)
+	headers := response.GetDefaultHeaders(len(h.message))
+	response.WriteHeaders(w, headers)
+	w.Write([]byte(h.message))
 }
 
 type Server struct {
@@ -95,40 +85,20 @@ func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		fmt.Printf("error parsing request: %s\n", err.Error())
+		handlerErr := NewHandlerError(response.BadRequest, err.Error())
+		handlerErr.Write(conn)
+		return
 	}
-
-	fmt.Printf(
-		"Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n",
-		req.RequestLine.Method,
-		req.RequestLine.RequestTarget,
-		req.RequestLine.HttpVersion,
-	)
-	fmt.Println("Headers:")
-	for key, val := range req.Headers {
-		fmt.Printf("- %s: %s\n", key, val)
-	}
-	fmt.Println("Body:")
-	fmt.Printf("%s\n", string(req.Body))
 
 	buf := bytes.NewBuffer([]byte{})
 	resErr := s.handler(buf, req)
 	if resErr != nil {
-		if err := writeHandlerError(conn, resErr); err != nil {
-			fmt.Printf("error writing response error: %s", err.Error())
-		}
+		resErr.Write(conn)
+		return
 	}
 
-	if err = response.WriteStatusLine(conn, response.Ok); err != nil {
-		fmt.Printf("error writing status line: %s\n", err.Error())
-	}
-
+	response.WriteStatusLine(conn, response.Ok)
 	headers := response.GetDefaultHeaders(buf.Len())
-	if err = response.WriteHeaders(conn, headers); err != nil {
-		fmt.Printf("error writing headers: %s\n", err)
-	}
-
-	if _, err = conn.Write(buf.Bytes()); err != nil {
-		fmt.Printf("error writing response body: %s\n", err)
-	}
+	response.WriteHeaders(conn, headers)
+	conn.Write(buf.Bytes())
 }
