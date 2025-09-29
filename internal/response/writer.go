@@ -13,6 +13,7 @@ const (
 	stateStatusLine writerState = iota
 	stateHeaders
 	stateBody
+	stateTrailers
 )
 
 type Writer struct {
@@ -32,6 +33,7 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 		return fmt.Errorf("cannot write status line in state: %d", w.state)
 	}
 	defer func() { w.state = stateHeaders }()
+
 	statusLine := getStatusLine(statusCode)
 	_, err := w.writer.Write([]byte(statusLine))
 
@@ -43,6 +45,7 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 		return fmt.Errorf("cannot write headers in state: %d", w.state)
 	}
 	defer func() { w.state = stateBody }()
+
 	for key, val := range headers {
 		header := fmt.Sprintf("%s: %s\r\n", key, val)
 		if _, err := w.writer.Write([]byte(header)); err != nil {
@@ -64,20 +67,42 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 }
 
 func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
-	chunk := fmt.Sprintf("%x\r\n%s\r\n", len(p), p)
-	n, err := w.WriteBody([]byte(chunk))
-	if err != nil {
-		return 0, err
+	if w.state != stateBody {
+		return 0, fmt.Errorf("cannot write body in state: %d", w.state)
 	}
 
-	return n, nil
+	chunkSize := len(p)
+	total := 0
+	n, err := fmt.Fprintf(w.writer, "%x\r\n", chunkSize)
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	n, err = w.writer.Write(p)
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	n, err = w.writer.Write([]byte("\r\n"))
+	if err != nil {
+		return total, err
+	}
+	total += n
+
+	return total, nil
 }
 
 func (w *Writer) WriteChunkedBodyDone() (int, error) {
-	endChunk := fmt.Sprintf("%x\r\n\r\n", 0)
-	n, err := w.WriteBody([]byte(endChunk))
+	if w.state != stateBody {
+		return 0, fmt.Errorf("cannot write body in state: %d", w.state)
+	}
+	defer func() { w.state = stateTrailers }()
+
+	n, err := w.writer.Write([]byte("0\r\n"))
 	if err != nil {
-		return 0, err
+		return n, err
 	}
 
 	return n, nil
