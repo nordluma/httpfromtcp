@@ -64,6 +64,11 @@ func (h Headers) Replace(key, value string) {
 	h[key] = strings.TrimSpace(value)
 }
 
+func (h Headers) Delete(key string) {
+	key = strings.ToLower(key)
+	delete(h, key)
+}
+
 var allowedSpecialChars = []rune{
 	'!',
 	'#',
