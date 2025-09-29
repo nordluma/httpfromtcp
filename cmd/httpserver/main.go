@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/nordluma/httpfromtcp/internal/request"
@@ -14,16 +18,66 @@ import (
 const port = 42069
 
 func defaultHandler(w *response.Writer, req *request.Request) {
-	switch req.RequestLine.RequestTarget {
-	case "/yourproblem":
+	target := req.RequestLine.RequestTarget
+	if target == "/yourproblem" {
 		handler400(w, req)
 		return
-	case "/myproblem":
+	}
+
+	if target == "/myproblem" {
 		handler500(w, req)
 		return
 	}
 
+	if strings.HasPrefix(target, "/httpbin/") {
+		proxyHandler(w, req)
+		return
+	}
+
 	handler200(w, req)
+}
+
+func proxyHandler(w *response.Writer, req *request.Request) {
+	target := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/")
+	res, err := http.Get("https://httpbin.org/" + target)
+	if err != nil {
+		handler500(w, req)
+		return
+	}
+	defer res.Body.Close()
+
+	w.WriteStatusLine(response.Ok)
+	h := response.GetDefaultHeaders(0)
+	h.Replace("transfer-encoding", "chunked")
+	h.Delete("content-length")
+	w.WriteHeaders(h)
+
+	const chunkSize = 1024
+	for {
+		buf := make([]byte, chunkSize)
+		n, err := res.Body.Read(buf)
+		fmt.Printf("read %d bytes from stream\n", n)
+		if n > 0 {
+			_, err = w.WriteChunkedBody(buf)
+			if err != nil {
+				fmt.Printf("error writing chunk: %v", err)
+				break
+			}
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			fmt.Printf("error reading response body: %v\n", err)
+			break
+		}
+	}
+
+	if _, err = w.WriteChunkedBodyDone(); err != nil {
+		fmt.Printf("error writing chunked body done: %v\n", err)
+	}
 }
 
 func handler400(w *response.Writer, _ *request.Request) {
