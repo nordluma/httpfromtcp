@@ -59,9 +59,8 @@ func (h Headers) Get(key string) (string, bool) {
 	return value, found
 }
 
-func (h Headers) Replace(key, value string) {
-	key = strings.ToLower(key)
-	h[key] = strings.TrimSpace(value)
+func (h Headers) Override(key, value string) {
+	h[key] = value
 }
 
 func (h Headers) Delete(key string) {
