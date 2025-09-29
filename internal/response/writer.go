@@ -107,3 +107,21 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 
 	return n, nil
 }
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	if w.state != stateTrailers {
+		return fmt.Errorf("cannot write trailers in state: %d", w.state)
+	}
+	defer func() { w.state = stateBody }()
+
+	for k, v := range h {
+		header := fmt.Sprintf("%s: %s\r\n", k, v)
+		if _, err := w.writer.Write([]byte(header)); err != nil {
+			return err
+		}
+	}
+
+	_, err := w.writer.Write([]byte("\r\n"))
+
+	return err
+}
