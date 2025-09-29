@@ -2,7 +2,6 @@ package response
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/nordluma/httpfromtcp/internal/headers"
 )
@@ -15,7 +14,7 @@ const (
 	InternalError StatusCode = 500
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+func getStatusLine(statusCode StatusCode) string {
 	reasonPhrase := ""
 	switch statusCode {
 	case Ok:
@@ -26,11 +25,7 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 		reasonPhrase = "Internal Server Error"
 	}
 
-	statusLine := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase)
-
-	_, err := w.Write([]byte(statusLine))
-
-	return err
+	return fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, reasonPhrase)
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
@@ -40,18 +35,4 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	headers.Set("Content-Type", "text/plain")
 
 	return headers
-}
-
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
-	for key, val := range headers {
-		header := fmt.Sprintf("%s: %s\r\n", key, val)
-		if _, err := w.Write([]byte(header)); err != nil {
-			return err
-		}
-	}
-
-	// add the end of headers
-	_, err := w.Write([]byte("\r\n"))
-
-	return err
 }

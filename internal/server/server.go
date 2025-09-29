@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"sync/atomic"
 
@@ -11,26 +9,7 @@ import (
 	"github.com/nordluma/httpfromtcp/internal/response"
 )
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
-
-type HandlerError struct {
-	status  response.StatusCode
-	message string
-}
-
-func NewHandlerError(status response.StatusCode, message string) *HandlerError {
-	return &HandlerError{
-		status:  status,
-		message: message,
-	}
-}
-
-func (h HandlerError) Write(w io.Writer) {
-	response.WriteStatusLine(w, h.status)
-	headers := response.GetDefaultHeaders(len(h.message))
-	response.WriteHeaders(w, headers)
-	w.Write([]byte(h.message))
-}
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener net.Listener
@@ -83,22 +62,15 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
+	w := response.NewWriter(conn)
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		handlerErr := NewHandlerError(response.BadRequest, err.Error())
-		handlerErr.Write(conn)
+		w.WriteStatusLine(response.BadRequest)
+		body := fmt.Appendf(nil, "error parsing request: %v", err)
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
 	}
 
-	buf := bytes.NewBuffer([]byte{})
-	resErr := s.handler(buf, req)
-	if resErr != nil {
-		resErr.Write(conn)
-		return
-	}
-
-	response.WriteStatusLine(conn, response.Ok)
-	headers := response.GetDefaultHeaders(buf.Len())
-	response.WriteHeaders(conn, headers)
-	conn.Write(buf.Bytes())
+	s.handler(w, req)
 }
